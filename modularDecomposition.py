@@ -230,7 +230,6 @@ def assembly(graph, root, vertex_status):
     print mu
     print vertices_in_component
     print is_right_connected
-    print component_index
     print component_at_index
     left = root[1][source_index]
     right = root[1][source_index]
