@@ -27,6 +27,7 @@ class NodeInfo:
         self.node_type = node_type
         self.node_split = NO_SPLIT
         self.index_in_root = -1
+        self.comp_num = -1
 
     def set_node_split(self, node_split):
         if self.node_split == NO_SPLIT:
@@ -61,6 +62,7 @@ class NodeInfo:
         elif self.node_split==BOTH_SPLIT:
             string += "BOTH"
 
+        string += " c" + str(self.comp_num)
         return string
 
     def __repr__(self):
@@ -83,6 +85,8 @@ class NodeInfo:
             string += "RIGHT"
         elif self.node_split==BOTH_SPLIT:
             string += "BOTH"
+
+        string += " c" + str(self.comp_num)
         return string
 
     def __eq__(self, other):
@@ -100,12 +104,12 @@ def modular_decomposition(graph):
                   tree needs to be computed
     :return: Modular decomposition tree computed for the graph
     """
-    print graph.vertices()
+    #print graph.vertices()
     if graph._directed:
         return ValueError("Graph must be directed")
     if graph.order() == 1:         #Single vertex graph
         root = create_normal_node(graph.vertices()[0])
-        print root
+        #print root
         return root
     if not graph.is_connected():
         #Parallel case:- The tree contains the MD trees
@@ -114,13 +118,13 @@ def modular_decomposition(graph):
         root = create_parallel_node()
         for component in components:
             root[1].append(modular_decomposition(graph.subgraph(component)))
-        print root
+        #print root
         return root
     elif graph.complement().is_connected():
         root = create_prime_node()
     else:
         root = create_series_node()
-    print graph.vertices()[0]
+    #print graph.vertices()[0]
     bfs_generator = graph.breadth_first_search(graph.vertices()[0], report_distance=True)
     prev_level_distance = -1
     prev_level_list = []
@@ -129,12 +133,12 @@ def modular_decomposition(graph):
     vertex_status[graph.vertices()[0]] = SOURCE
     for (vertex, distance) in bfs_generator:
         vertex_dist[vertex] = distance
-        print "vertex_dist", vertex, vertex_dist[vertex]
+        #print "vertex_dist", vertex, vertex_dist[vertex]
         #Different distances from the source vertex are considered
         # as different levels in the algorithm
         if distance != prev_level_distance: #On start of new level in BFS
             if prev_level_list:
-                print "recursive call",prev_level_list
+                #print "recursive call",prev_level_list
                 #MD Tree is computed for each level and added to the forest
                 root[1].append(modular_decomposition(graph.subgraph(prev_level_list)))
             if prev_level_distance==1 and distance!=1:
@@ -157,7 +161,7 @@ def modular_decomposition(graph):
     elif distance != 0:
         for v in prev_level_list:
             vertex_status[v] = RIGHT_OF_SOURCE
-    print "recursive call", prev_level_list
+    #print "recursive call", prev_level_list
     root[1].append(modular_decomposition(graph.subgraph(prev_level_list)))
 
     #The MD tree for the neighbours of source marked as LEFT_OF_SOURCE
@@ -167,25 +171,66 @@ def modular_decomposition(graph):
     root[1][1] = root[1][0]
     root[1][0] = temp
     root[0].node_type = FOREST
-    print root
-    print "************REFINEMENT************"
-    print "vertex_status: ", vertex_status
+    #print root
+    #print "************REFINEMENT************"
+    #print "vertex_status: ", vertex_status
     clear_node_split_info(root)
+    number_cocomponents(root, vertex_status)
+    number_components(root, vertex_status)
+    #print root
     refine(graph, root, vertex_dist, vertex_status)
-    print "************PROMOTE LEFT**********"
+    #print "************PROMOTE LEFT**********"
     promote_left(root)
-    print "************PROMOTE RIGHT************"
+    #print "************PROMOTE RIGHT************"
     promote_right(root)
-    print "************PROMOTE CHILD************"
+    #print "************PROMOTE CHILD************"
     promote_child(root)
-    assembly(graph, root, vertex_status)
-    print root
+    assembly(graph, root, vertex_status, vertex_dist)
+    #print root
     if root[0].node_type==FOREST:
         return root[1][0]
     else:
         return root
 
-def assembly(graph, root, vertex_status):
+def number_components(root, vertex_status):
+    comp_num = 0
+    flag = False
+    for tree in root[1]:
+        #print tree
+        if tree[0].node_type==NORMAL and vertex_status[tree[1][0]]==SOURCE:
+            flag = True
+            continue
+        if not flag:
+            continue
+        comp_num += recursively_number_cocomponents(tree, comp_num, PARALLEL)
+
+def number_cocomponents(root, vertex_status):
+    cocomp_num = 0
+    for tree in root[1]:
+        #print tree
+        if tree[0].node_type==NORMAL and vertex_status[tree[1][0]]==SOURCE:
+            break
+        cocomp_num += recursively_number_cocomponents(tree, cocomp_num, SERIES)
+
+def recursively_number_cocomponents(tree, cocomp_num, by_type):
+    orig_cocomp_num = cocomp_num
+    if tree[0].node_type==by_type:
+        tree[0].comp_num = cocomp_num
+        for subtree in tree[1]:
+            number_subtree(subtree, cocomp_num)
+            cocomp_num += 1
+    else:
+        number_subtree(tree, cocomp_num)
+        cocomp_num+=1
+    return cocomp_num - orig_cocomp_num
+
+def number_subtree(tree, number):
+    tree[0].comp_num = number
+    if tree[0].node_type!=NORMAL:
+        for subtree in tree[1]:
+            number_subtree(subtree, number)
+
+def assembly(graph, root, vertex_status, vertex_dist):
     """
     It assembles the forest obtained after the promotion phase
     into a modular decomposition tree.
@@ -195,7 +240,7 @@ def assembly(graph, root, vertex_status):
     :param vertex_status: Dictionary which stores the position of
                           vertex with respect to the source
     """
-    print "***********ASSEMBLY**************"
+    #print "***********ASSEMBLY**************"
     mu = {}     #Maps index to the mu (co)component computed for the tree at the index
     source_index = -1   #Stores index of tree containing the source vertex in the forest
 
@@ -227,14 +272,14 @@ def assembly(graph, root, vertex_status):
                                               else True
         index += 1
     mu[source_index] = root[1][source_index]
-    print mu
-    print vertices_in_component
-    print is_right_connected
-    print component_at_index
+    #print mu
+    #print vertices_in_component
+    #print is_right_connected
+    #print component_at_index
     left = root[1][source_index]
     right = root[1][source_index]
     while not len(root[1])==1:
-        print "ROOT: ",root
+        #print "ROOT: ",root
         #source_index is changed everytime a new module is formed therefore updated
         #First series module is attempted
         [result, source_index] = check_series(root, left, right, source_index, mu)
@@ -243,20 +288,20 @@ def assembly(graph, root, vertex_status):
             continue
 
         #If series module cant be formed, parallel is tried
-        [result, source_index] = check_parallel(root, left, right, source_index, mu, is_right_connected)
+        [result, source_index] = check_parallel(graph, root, left, right, source_index, mu, is_right_connected, vertex_dist, vertices_in_component)
         if result:
             right = root[1][source_index][1][-1]
             continue
 
         #Finally a prime module is formed if both series and parallel can not be created
-        [result, source_index] = check_prime(root, left, right, source_index, mu)
+        [result, source_index] = check_prime(graph, root, left, right, source_index, mu, vertex_dist, vertices_in_component)
         if result:
             if root[1][source_index][1][0][0].index_in_root != -1:
                 left = root[1][source_index][1][0]
             if root[1][source_index][1][-1][0].index_in_root != -1:
                 right = root[1][source_index][1][-1]
 
-def check_prime(root, left, right, source_index, mu):
+def check_prime(graph, root, left, right, source_index, mu, vertex_dist, vertices_in_component):
     """
     Assembles the forest to create a prime module.
 
@@ -272,23 +317,65 @@ def check_prime(root, left, right, source_index, mu):
     new_left_index = source_index-1 if source_index-1 >=0 else source_index
     right_index_for_mu = new_right_index
     left_index_for_mu = new_left_index
-    if left_index_for_mu != source_index:
-        while new_right_index<len(root[1])-1 and root[1][new_right_index][0].index_in_root < mu[left_index_for_mu][0].index_in_root:
+    """while new_left_index>=0:
+        while new_right_index<len(root[1])-1 and \
+                        root[1][new_right_index][0].index_in_root < mu[new_left_index][0].index_in_root:
+            new_right_index += 1
+        new_left_index-=1"""
+    left_queue = Queue()
+    right_queue = Queue()
+    if new_left_index!=source_index:
+        left_queue.put(new_left_index)
+    if new_right_index!=source_index:
+        right_queue.put(new_right_index)
+    while not left_queue.empty() and not right_queue.empty():
+        if not left_queue.empty():
+            left_index = left_queue.get()
+            while new_right_index < len(root[1]) - 1 and \
+                            root[1][new_right_index][0].index_in_root < mu[left_index][0].index_in_root:
+                new_right_index += 1
+                right_queue.put(new_right_index)
+            while has_left_cocomponent_fragment(root, left_index):
+                #print "LEFT_COCOMP: "+str(left_index)
+                if left_index-1>=0:
+                    left_queue.put(left_index-1)
+                    left_index-=1
+                    new_left_index = min(left_index, new_left_index)
+        if not right_queue.empty():
+            right_index = right_queue.get()
+            while new_left_index > 0 and \
+                            root[1][new_left_index][0].index_in_root > mu[right_index][0].index_in_root:
+                new_left_index -= 1
+                left_queue.put(new_left_index)
+            while has_right_component_fragment(root, right_index) or \
+                    has_right_layer_neighbor(graph, root, right_index, vertex_dist, vertices_in_component):
+                if has_right_layer_neighbor(graph, root, right_index, vertex_dist, vertices_in_component):
+                    new_left_index = 0
+                    new_right_index = len(root[1])-1
+                    break
+                if right_index + 1 < len(root[1]):
+                    right_queue.put(right_index + 1)
+                    right_index += 1
+                    new_right_index = max(right_index, new_right_index)
+    """if left_index_for_mu != source_index:
+        if new_right_index<len(root[1])-1 and \
+                        root[1][new_right_index][0].index_in_root < mu[new_left_index][0].index_in_root:
             new_right_index += 1
     if right_index_for_mu != source_index:
-        while new_left_index>0 and root[1][new_left_index][0].index_in_root > mu[right_index_for_mu][0].index_in_root:
-            new_left_index -= 1
+        if new_left_index>0 and \
+                        root[1][new_left_index][0].index_in_root > mu[right_index_for_mu][0].index_in_root:
+            new_left_index -= 1"""
     temp = new_left_index
     node = create_prime_node()
     while temp <= new_right_index:
         node[1].append(root[1][temp])
         temp += 1
-    print "PRIME Indices", new_left_index, new_right_index
+    #print "PRIME Indices", new_left_index, new_right_index
     root[1][new_left_index:new_right_index + 1] = []
     root[1].insert(new_left_index, node)
     return [True, new_left_index]
 
-def check_parallel(root, left, right, source_index, mu, is_right_connected):
+def check_parallel(graph, root, left, right, source_index, mu, is_right_connected, vertex_dist, vertices_in_component):
     """
     Assembles the forest to create a parallel module.
 
@@ -305,10 +392,14 @@ def check_parallel(root, left, right, source_index, mu, is_right_connected):
 
     """
     new_right_index = source_index
-    while new_right_index < len(root[1])-1:
-        if mu[root[1][new_right_index+1][0].index_in_root] == left:
-            if is_right_connected[root[1][new_right_index+1][0].index_in_root]:
-                break
+    while new_right_index+1 < len(root[1]):
+        if has_right_component_fragment(root, new_right_index+1):
+            break
+        if has_right_layer_neighbor(graph, root, new_right_index+1, vertex_dist, vertices_in_component):
+            break
+        if mu[root[1][new_right_index+1][0].index_in_root][0].index_in_root >= left[0].index_in_root:
+            #if is_right_connected[root[1][new_right_index+1][0].index_in_root]:
+                #break
             new_right_index += 1
         else:
             break
@@ -316,7 +407,11 @@ def check_parallel(root, left, right, source_index, mu, is_right_connected):
         node = create_parallel_node()
         temp = source_index
         while temp <= new_right_index:
-            node[1].append(root[1][temp])
+            if root[1][temp][0].node_type == PARALLEL:
+                for tree in root[1][temp][1]:
+                    node[1].append(tree)
+            else:
+                node[1].append(root[1][temp])
             temp += 1
         root[1][source_index:new_right_index+1] = []
         root[1].insert(source_index, node)
@@ -337,8 +432,12 @@ def check_series(root, left, right, source_index, mu):
 
     """
     new_left_index = source_index
+    if source_index > 1:
+        return [False, source_index]
     while new_left_index > 0:
-        if mu[root[1][new_left_index-1][0].index_in_root] == right:
+        if has_left_cocomponent_fragment(root, new_left_index-1):
+            break
+        if mu[root[1][new_left_index-1][0].index_in_root][0].index_in_root <= right[0].index_in_root:
             new_left_index -= 1
         else:
             break
@@ -346,12 +445,46 @@ def check_series(root, left, right, source_index, mu):
         node = create_series_node()
         temp = new_left_index
         while source_index >= temp:
-            node[1].append(root[1][temp])
+            if root[1][temp][0].node_type == SERIES:
+                for tree in root[1][temp][1]:
+                    node[1].append(tree)
+            else:
+                node[1].append(root[1][temp])
             temp += 1
         root[1][new_left_index:source_index+1] = []
         root[1].insert(new_left_index, node)
         return [True, new_left_index]
     return [False, new_left_index]
+
+def has_left_cocomponent_fragment(root, cocomp_index):
+    index = 0
+    while index < cocomp_index:
+        if root[1][index][0].comp_num == root[1][cocomp_index][0].comp_num:
+            return True
+        index +=1
+    return False
+
+def has_right_component_fragment(root, comp_index):
+    index = comp_index+1
+    while index < len(root[1]):
+        if root[1][index][0].comp_num == root[1][comp_index][0].comp_num:
+            return True
+        index +=1
+    return False
+
+def has_right_layer_neighbor(graph, root, comp_index, vertex_dist, vertices_in_component):
+    index = comp_index+1
+    while index < len(root[1]):
+        if vertex_dist[get_vertex_in(root[1][index])] > vertex_dist[get_vertex_in(root[1][comp_index])] and \
+                is_component_connected(graph, root[1][index][0].index_in_root, root[1][comp_index][0].index_in_root, vertices_in_component):
+            return True
+        index +=1
+    return False
+
+def get_vertex_in(tree):
+    if tree[0].node_type==NORMAL:
+        return tree[1][0]
+    return get_vertex_in(tree[1][0])
 
 def compute_mu_for_co_component(graph, component_index, source_index, root, vertices_in_component):
     """
@@ -373,6 +506,25 @@ def compute_mu_for_co_component(graph, component_index, source_index, root, vert
             return mu_for_co_component
         index -= 1
     return mu_for_co_component
+
+def is_left_connected(graph, component_index, root, vertices_in_component):
+    """
+    Returns a connected component to the right of the input component
+
+    :param graph: Graph whose MD tree needs to be computed
+    :param component_index: index of the co-component
+    :param source_index: index of the source in the forest
+    :param root: the forest which needs to be assembled into a MD tree
+    :param vertices_in_component: Dictionary which maps index to list of
+                                  vertices in the tree at the index in the forest
+    :return: Component connected to the component at the component_index
+    """
+    index = 0
+    while index < component_index:
+        if is_component_connected(graph, component_index, index, vertices_in_component):
+            return True
+        index += 1
+    return False
 
 def get_right_connected(graph, component_index, source_index, root, vertices_in_component):
     """
@@ -479,7 +631,7 @@ def promote_left(root):
                 q.put([child, tree])
         for tree in to_remove:
             child[1].remove(tree)
-    print root
+    #print root
 
 def promote_right(root):
     """
@@ -510,7 +662,7 @@ def promote_right(root):
                 q.put([child, tree])
         for tree in to_remove:
                 child[1].remove(tree)
-    print root
+    #print root
 
 def promote_child(root):
     """
@@ -540,7 +692,7 @@ def promote_child(root):
         else:
             for tree in child[1]:
                     q.put([child, tree])
-    print root
+    #print root
 
 def clear_node_split_info(root):
     """
@@ -564,7 +716,7 @@ def refine(graph, root, vertex_dist, vertex_status):
     :param vertex_status: dictionary mapping the vertex to the position w.r.t source
 
     """
-    print root
+    #print root
     for v in graph.vertices():
         if v in vertex_status and vertex_status[v]==SOURCE:
             continue
@@ -572,9 +724,9 @@ def refine(graph, root, vertex_dist, vertex_status):
         for e in graph.edges_incident(v):
             if vertex_dist[e[0]]!=vertex_dist[e[1]]:
                 x.append(e[0] if e[0]!=v else e[1])
-        print "x=",x
+        #print "x=",x
         maximal_subtrees_with_leaves_in_x(root, v, x, vertex_status, False, 0)
-    print root
+    #print root
 
 def maximal_subtrees_with_leaves_in_x(root, v, x, vertex_status, tree_left_of_source, level):
     """
@@ -638,7 +790,7 @@ def maximal_subtrees_with_leaves_in_x(root, v, x, vertex_status, tree_left_of_so
             Tb = [] #contains subtrees with leaves not in x
             for subtree in root[1]:
                 subtree_result = maximal_subtrees_with_leaves_in_x(subtree, v, x, vertex_status, tree_left_of_source, level+1)
-                print subtree_result
+                #print subtree_result
                 root[0].set_node_split(subtree_result[1])
                 root[0].set_node_split(split)
                 if subtree_result[0]:
@@ -652,9 +804,11 @@ def maximal_subtrees_with_leaves_in_x(root, v, x, vertex_status, tree_left_of_so
             root[1].append(create_parallel_node())
             root[1][-1][0].node_type = node_type
             root[1][-1][0].node_split = root[0].node_split
+            root[1][-1][0].comp_num = root[0].comp_num
             root[1].append(create_parallel_node())
             root[1][-1][0].node_type = node_type
             root[1][-1][0].node_split = root[0].node_split
+            root[1][-1][0].comp_num = root[0].comp_num
             if level==0:
                 root[0].node_type = FOREST
             """    if split == LEFT_SPLIT:
@@ -692,6 +846,7 @@ if __name__ == "__main__":
          6: [3,5]
          }
     g = Graph(d)
+    print d
     print modular_decomposition(g)
     d1 = {1:[5,4,3,24,6,7,8,9,2,10,11,12,13,14,16,17],
         2:[1],
@@ -713,6 +868,7 @@ if __name__ == "__main__":
         24:[5,4,3,1]
         }
     g1 = Graph(d1)
+    print d1
     print modular_decomposition(g1)
     d2 = {
         1:[2,3,4],
@@ -728,4 +884,5 @@ if __name__ == "__main__":
         11:[6,7,8,9]
     }
     g2 = Graph(d2)
+    print d2
     print modular_decomposition(g2)
