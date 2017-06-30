@@ -253,7 +253,8 @@ def assembly(graph, root, vertex_status, vertex_dist):
     # Maps index to boolean indicating whether a component at
     # the index is connected to a component to its right
     component_at_index = {}     #Maps index to tree at that index in the forest `root`
-    index = 0
+
+    update_comp_num(root)
     for index, component in enumerate(root[1]):
         component_at_index[index] = component
         if component[0].node_type==NORMAL and vertex_status[component[1][0]]==SOURCE:
@@ -301,6 +302,12 @@ def assembly(graph, root, vertex_status, vertex_dist):
             if root[1][source_index][1][-1][0].index_in_root != -1:
                 right = root[1][source_index][1][-1]
 
+def update_comp_num(root):
+    if root[0].node_type!=NORMAL:
+        root[0].comp_num = root[1][0][0].comp_num
+        for tree in root[1]:
+            update_comp_num(tree)
+
 def check_prime(graph, root, left, right, source_index, mu, vertex_dist, vertices_in_component):
     """
     Assembles the forest to create a prime module.
@@ -328,12 +335,14 @@ def check_prime(graph, root, left, right, source_index, mu, vertex_dist, vertice
         left_queue.put(new_left_index)
     if new_right_index!=source_index:
         right_queue.put(new_right_index)
-    while not left_queue.empty() and not right_queue.empty():
+    #print "$$$$$$OK$$$$$"
+    while not left_queue.empty() or not right_queue.empty():
         if not left_queue.empty():
             if new_left_index==0:
                 left_queue.clear()
                 continue
             left_index = left_queue.get()
+            #print "LEFT_INDEX: ", left_index
             while new_right_index < len(root[1]) - 1 and \
                             root[1][new_right_index][0].index_in_root < mu[left_index][0].index_in_root:
                 new_right_index += 1
@@ -350,6 +359,7 @@ def check_prime(graph, root, left, right, source_index, mu, vertex_dist, vertice
                 right_queue.clear()
                 continue
             right_index = right_queue.get()
+            #print "RIGHT_INDEX: ",right_index
             while new_left_index > 0 and \
                             root[1][new_left_index][0].index_in_root > mu[right_index][0].index_in_root:
                 new_left_index -= 1
@@ -432,8 +442,6 @@ def check_series(root, left, right, source_index, mu):
 
     """
     new_left_index = source_index
-    if source_index > 1:
-        return [False, source_index]
     while new_left_index > 0:
         if has_left_cocomponent_fragment(root, new_left_index-1):
             break
@@ -788,7 +796,6 @@ def maximal_subtrees_with_leaves_in_x(root, v, x, vertex_status, tree_left_of_so
             root[1].append(create_parallel_node())
             root[1][-1][0].node_type = node_type
             root[1][-1][0].node_split = root[0].node_split
-            root[1][-1][0].comp_num = root[0].comp_num
             root[1].append(create_parallel_node())
             root[1][-1][0].node_type = node_type
             root[1][-1][0].node_split = root[0].node_split
@@ -803,6 +810,8 @@ def maximal_subtrees_with_leaves_in_x(root, v, x, vertex_status, tree_left_of_so
                     root[1][-1][1] = Tb"""
             root[1][-2][1] = Ta
             root[1][-1][1] = Tb
+            root[1][-2][0].comp_num = Ta[0][0].comp_num
+            root[1][-1][0].comp_num = Tb[0][0].comp_num
 
         return_split = root[0].node_split
         return [flag, return_split]
@@ -829,8 +838,8 @@ if __name__ == "__main__":
          4: [2], 5: [6,3],
          6: [3,5]
          }
-    g = Graph(d)
     print d
+    g = Graph(d)
     print modular_decomposition(g)
     d1 = {1:[5,4,3,24,6,7,8,9,2,10,11,12,13,14,16,17],
         2:[1],
@@ -851,8 +860,8 @@ if __name__ == "__main__":
         18:[17],
         24:[5,4,3,1]
         }
-    g1 = Graph(d1)
     print d1
+    g1 = Graph(d1)
     print modular_decomposition(g1)
     d2 = {
         1:[2,3,4],
@@ -867,8 +876,8 @@ if __name__ == "__main__":
         10:[6,7,8,9],
         11:[6,7,8,9]
     }
-    g2 = Graph(d2)
     print d2
+    g2 = Graph(d2)
     print modular_decomposition(g2)
     g3 = HallJankoGraph()
     print g3
