@@ -621,6 +621,7 @@ def check_parallel(graph, root, left, right, source_index, mu, vertex_dist, vert
             if root[1][temp][0].node_type == PARALLEL:
                 for tree in root[1][temp][1]:
                     node[1].append(tree)
+                    tree[0].index_in_root = root[1][temp][0].index_in_root
             else:
                 node[1].append(root[1][temp])
         root[1][source_index:new_right_index+1] = []
@@ -655,6 +656,7 @@ def check_series(root, left, right, source_index, mu):
             if root[1][temp][0].node_type == SERIES:
                 for tree in root[1][temp][1]:
                     node[1].append(tree)
+                    tree[0].index_in_root = root[1][temp][0].index_in_root
             else:
                 node[1].append(root[1][temp])
         root[1][new_left_index:source_index+1] = []
