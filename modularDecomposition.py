@@ -128,6 +128,8 @@ def modular_decomposition(graph):
     #print graph.vertices()
     if graph._directed:
         return ValueError("Graph must be undirected")
+    if graph.order() == 0:
+        return create_prime_node()
     if graph.order() == 1:         #Single vertex graph
         root = create_normal_node(next(graph.vertex_iterator()))
         #print root
@@ -755,7 +757,8 @@ def compute_mu_for_component(graph, component_index, source_index, root, vertice
     """
     mu_for_component = root[1][0]
     for index in range(0, source_index):
-        if is_component_connected(graph, component_index, index, vertices_in_component):
+        if mu_for_component == root[1][index] and \
+                is_component_connected(graph, component_index, index, vertices_in_component):
              mu_for_component = root[1][index+1]
     return mu_for_component
 
@@ -1144,8 +1147,8 @@ if __name__ == "__main__":
     g22 = CubeGraph(8)
     root.append([g22, modular_decomposition(g22)])
     for index,pair in enumerate(root):
-        #if index!=22:
-            #continue
+        if index!=22:
+            continue
         print pair[0].to_dictionary()
         print_md_tree(pair[1],0)
         print "TEST RESULT: ", test_modular_decomposition(pair[1], pair[0])
